@@ -770,9 +770,21 @@
   });
 
   /* ============ PEERJS WIRING ============ */
+  // STUN alone often fails to connect two devices on different networks
+  // (mobile data, separate boxes, restrictive Wi-Fi). Adding a free TURN
+  // relay (Open Relay Project) makes the connection work in those cases too.
+  const ICE_CONFIG = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+    ]
+  };
+
   function initPeer(id){
     return new Promise((resolve, reject)=>{
-      const p = new Peer(id, { debug:1 });
+      const p = new Peer(id, { debug:1, config: ICE_CONFIG });
       p.on('open', pid => resolve(p));
       p.on('error', err => reject(err));
     });
@@ -839,19 +851,41 @@
     try{
       peer = await initPeer(null);
     }catch(e){
-      $('home-status').textContent = "Impossible de se connecter au réseau.";
+      $('home-status').textContent = "Impossible de se connecter au réseau. Vérifiez votre connexion internet.";
       return;
     }
     role = 'guest';
     myId = peer.id;
+    let opened = false;
+    let settled = false;
+
+    // A 'peer-unavailable' error means PeerJS's server could not find that
+    // room id at all -> the code is genuinely wrong. Any other error, or a
+    // connection that just never opens, is more likely a network/NAT issue.
+    peer.on('error', (err)=>{
+      if(settled) return;
+      if(err && err.type === 'peer-unavailable'){
+        settled = true;
+        $('home-status').textContent = "Aucune salle avec ce code. Vérifiez qu'il est correct et que l'hôte est bien resté sur l'écran d'attente.";
+      }
+    });
+
     const conn = peer.connect('mind-' + code.toUpperCase(), {reliable:true});
     hostConn = conn;
-    let opened = false;
-    const timeout = setTimeout(()=>{
-      if(!opened) $('home-status').textContent = "Salle introuvable. Vérifiez le code.";
+
+    $('home-status').textContent = 'Recherche de la salle…';
+    const midway = setTimeout(()=>{
+      if(!opened && !settled) $('home-status').textContent = 'Toujours en cours… la connexion peut prendre un peu de temps selon les réseaux.';
     }, 6000);
+    const timeout = setTimeout(()=>{
+      if(!opened && !settled){
+        settled = true;
+        $('home-status').textContent = "Connexion impossible. Le code est peut-être faux, ou votre réseau (4G, Wi-Fi restrictif) bloque la connexion directe. Réessayez, idéalement avec les deux appareils sur le même Wi-Fi.";
+      }
+    }, 18000);
+
     conn.on('open', ()=>{
-      opened = true; clearTimeout(timeout);
+      opened = true; settled = true; clearTimeout(midway); clearTimeout(timeout);
       conn.send({type:'join', name: myName});
       $('lobby-code').textContent = code.toUpperCase();
       switchScreen('screen-lobby');
@@ -862,7 +896,11 @@
       else if(data.type==='error'){ $('home-status').textContent = data.message; }
     });
     conn.on('close', ()=>{ showBanner("Connexion perdue avec l'hôte.", 4000); });
-    conn.on('error', ()=>{ $('home-status').textContent = "Erreur de connexion."; });
+    conn.on('error', ()=>{
+      if(settled) return;
+      settled = true;
+      $('home-status').textContent = "Erreur de connexion. Réessayez.";
+    });
   }
 
   /* ============ HOME SCREEN WIRING ============ */
