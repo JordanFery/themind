@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Le Mental — jeu coopératif silencieux</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root{
+    --ink-0:#0d0f1a;
+    --ink-1:#161a2b;
+    --ink-2:#1f2438;
+    --ink-3:#2a3050;
+    --parchment:#f3ecd9;
+    --parchment-dim:#c9c2ac;
+    --ember:#c1443c;
+    --ember-glow:#e5665c;
+    --gold:#d9a441;
+    --gold-glow:#f0c368;
+    --mist:#8a90b3;
+    --text-hi:#f4f2ea;
+    --text-lo:#a9aec9;
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100dvh;
+    background:
+      radial-gradient(60% 40% at 50% 0%, #1b2036 0%, transparent 60%),
+      radial-gradient(80% 60% at 50% 100%, #10121f 0%, transparent 70%),
+      var(--ink-0);
+    color:var(--text-hi);
+    font-family:'Manrope', system-ui, sans-serif;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{ font-family:'Fraunces', serif; font-weight:600; letter-spacing:-0.01em; }
+  button{ font-family:inherit; }
+  ::selection{ background:var(--gold); color:var(--ink-0); }
+
+  .app{ min-height:100dvh; display:flex; flex-direction:column; padding-top:var(--safe-t); }
+  .screen{ display:none; flex:1; min-height:100dvh; flex-direction:column; }
+  .screen.active{ display:flex; }
+
+  /* ---------- HOME ---------- */
+  #screen-home{ align-items:center; justify-content:center; padding:32px 24px calc(32px + var(--safe-b)); text-align:center; }
+  .brand{ display:flex; flex-direction:column; align-items:center; gap:6px; margin-bottom:40px; }
+  .brand .glyph{
+    width:64px; height:64px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, var(--gold-glow), var(--gold) 55%, #9a7420 100%);
+    box-shadow: 0 0 40px rgba(217,164,65,0.35);
+    margin-bottom:10px;
+  }
+  .brand h1{ font-size:2rem; margin:0; color:var(--text-hi); }
+  .brand p{ margin:4px 0 0; color:var(--text-lo); font-size:0.95rem; max-width:280px; line-height:1.4; }
+
+  .card-panel{
+    background:linear-gradient(180deg, var(--ink-2), var(--ink-1));
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:20px;
+    padding:22px;
+    width:100%;
+    max-width:360px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.35);
+    margin-bottom:16px;
+  }
+  .field{ text-align:left; margin-bottom:14px; }
+  .field label{ display:block; font-size:0.75rem; color:var(--text-lo); margin-bottom:6px; letter-spacing:0.02em; }
+  .field input{
+    width:100%; padding:13px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.1);
+    background:var(--ink-0); color:var(--text-hi); font-size:1rem; outline:none;
+  }
+  .field input:focus{ border-color:var(--gold); }
+  .field input.code{ text-transform:uppercase; letter-spacing:0.3em; text-align:center; font-family:'Fraunces',serif; font-size:1.2rem; }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:14px 18px; border-radius:14px; border:none; cursor:pointer;
+    font-weight:700; font-size:0.98rem; width:100%;
+    transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn-primary{ background:linear-gradient(180deg, var(--gold-glow), var(--gold)); color:#2a1c05; }
+  .btn-primary:disabled{ filter:grayscale(0.6) opacity(0.5); }
+  .btn-ghost{ background:transparent; color:var(--text-hi); border:1px solid rgba(255,255,255,0.16); }
+  .btn-danger{ background:linear-gradient(180deg, var(--ember-glow), var(--ember)); color:#2a0906; }
+  .btn-sm{ padding:9px 14px; font-size:0.85rem; width:auto; border-radius:11px; }
+
+  .divider-text{ display:flex; align-items:center; gap:10px; color:var(--text-lo); font-size:0.75rem; margin:18px 0; width:100%; max-width:360px; }
+  .divider-text::before, .divider-text::after{ content:''; flex:1; height:1px; background:rgba(255,255,255,0.1); }
+
+  .help-link{ color:var(--mist); font-size:0.85rem; text-decoration:underline; text-underline-offset:3px; background:none; border:none; cursor:pointer; margin-top:6px; }
+
+  /* ---------- LOBBY ---------- */
+  #screen-lobby{ padding:28px 22px calc(24px + var(--safe-b)); align-items:center; }
+  .room-code{
+    font-family:'Fraunces',serif; font-size:2.4rem; letter-spacing:0.25em;
+    color:var(--gold-glow); margin:6px 0 2px; text-shadow:0 0 30px rgba(217,164,65,0.3);
+  }
+  .lobby-sub{ color:var(--text-lo); font-size:0.85rem; margin-bottom:26px; text-align:center; }
+  .player-list{ width:100%; max-width:360px; display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .player-row{
+    display:flex; align-items:center; gap:12px; padding:12px 14px;
+    background:var(--ink-2); border-radius:14px; border:1px solid rgba(255,255,255,0.05);
+  }
+  .avatar{
+    width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:0.9rem; color:#fff; flex-shrink:0;
+  }
+  .player-row .pname{ font-weight:600; flex:1; }
+  .player-row .ptag{ font-size:0.7rem; color:var(--text-lo); }
+  .lobby-rules{ width:100%; max-width:360px; margin-top:auto; }
+  .rules-box{
+    background:var(--ink-2); border-radius:14px; padding:14px 16px; font-size:0.82rem; color:var(--text-lo);
+    line-height:1.5; margin-bottom:18px;
+  }
+  .rules-box b{ color:var(--text-hi); }
+
+  /* ---------- GAME ---------- */
+  #screen-game{ padding:0; }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:calc(14px + var(--safe-t)) 16px 12px;
+    background:linear-gradient(180deg, rgba(13,15,26,0.95), rgba(13,15,26,0.0));
+  }
+  .stat{ display:flex; align-items:center; gap:6px; font-weight:700; font-size:0.95rem; }
+  .stat .icons{ display:flex; gap:3px; }
+  .heart, .star{ width:16px; height:16px; }
+  .level-chip{
+    font-family:'Fraunces',serif; font-size:0.95rem; color:var(--text-hi);
+    background:var(--ink-2); padding:6px 14px; border-radius:var(--radius-pill);
+    border:1px solid rgba(255,255,255,0.08);
+  }
+  .help-btn{
+    width:32px; height:32px; border-radius:50%; background:var(--ink-2); border:1px solid rgba(255,255,255,0.08);
+    color:var(--text-lo); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.85rem; font-weight:700;
+  }
+
+  .others-row{
+    display:flex; gap:10px; overflow-x:auto; padding:6px 16px 14px; scrollbar-width:none;
+  }
+  .others-row::-webkit-scrollbar{ display:none; }
+  .other-chip{
+    display:flex; align-items:center; gap:8px; flex-shrink:0;
+    background:var(--ink-2); border-radius:var(--radius-pill); padding:6px 12px 6px 6px;
+    border:1px solid rgba(255,255,255,0.06); transition:box-shadow .2s ease, border-color .2s ease;
+  }
+  .other-chip.raised{ border-color:var(--gold); box-shadow:0 0 14px rgba(217,164,65,0.4); }
+  .other-chip .avatar{ width:26px; height:26px; font-size:0.7rem; }
+  .other-chip .oname{ font-size:0.8rem; font-weight:600; }
+  .other-chip .ocount{ font-size:0.72rem; color:var(--text-lo); background:var(--ink-0); border-radius:8px; padding:1px 6px; }
+  .other-chip.disconnected{ opacity:0.4; }
+
+  .center-stage{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:relative; padding:10px 20px; min-height:0;
+  }
+  .pile-wrap{ position:relative; width:150px; height:200px; display:flex; align-items:center; justify-content:center; }
+  .ghost-card{
+    position:absolute; width:130px; height:180px; border-radius:var(--radius-card);
+    background:var(--ink-2); border:1.5px dashed rgba(255,255,255,0.12);
+  }
+  .pile-card{
+    position:absolute; width:130px; height:180px; border-radius:var(--radius-card);
+    background:linear-gradient(160deg, var(--parchment), #e6dcc0);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 14px 30px rgba(0,0,0,0.45);
+    font-family:'Fraunces',serif; font-weight:700; color:var(--ink-0);
+    animation:dropIn .32s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .pile-card .num{ font-size:3.4rem; }
+  .pile-card.mistake{ background:linear-gradient(160deg, #e9c9c4, #d7a9a2); }
+  .pile-card .owner-tag{
+    position:absolute; bottom:10px; font-size:0.68rem; font-weight:700; color:#6b5f3f;
+    text-transform:uppercase; letter-spacing:0.06em;
+  }
+  @keyframes dropIn{ from{ transform:translateY(-26px) scale(0.85) rotate(-6deg); opacity:0; } to{ transform:translateY(0) scale(1) rotate(0); opacity:1; } }
+
+  .toast{
+    position:absolute; top:-6px; left:50%; transform:translate(-50%,-100%);
+    background:var(--ink-2); border:1px solid rgba(255,255,255,0.12); color:var(--text-hi);
+    padding:9px 16px; border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600;
+    white-space:nowrap; box-shadow:0 8px 20px rgba(0,0,0,0.4); opacity:0; pointer-events:none;
+  }
+  .toast.show{ animation:toastIn 2.6s ease forwards; }
+  @keyframes toastIn{ 0%{opacity:0; transform:translate(-50%,-90%);} 12%{opacity:1; transform:translate(-50%,-100%);} 80%{opacity:1;} 100%{opacity:0; transform:translate(-50%,-110%);} }
+  .toast.mistake{ border-color:var(--ember); color:var(--ember-glow); }
+  .toast.reward{ border-color:var(--gold); color:var(--gold-glow); }
+
+  .hand-zone{
+    padding:8px 0 calc(18px + var(--safe-b));
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+  }
+  .shuriken-btn{
+    display:flex; align-items:center; gap:8px; padding:10px 20px; border-radius:var(--radius-pill);
+    background:var(--ink-2); border:1.5px solid rgba(217,164,65,0.35); color:var(--gold-glow);
+    font-weight:700; font-size:0.85rem; cursor:pointer;
+  }
+  .shuriken-btn.active{ background:linear-gradient(180deg, var(--gold-glow), var(--gold)); color:#2a1c05; border-color:transparent; box-shadow:0 0 24px rgba(217,164,65,0.5); }
+  .shuriken-btn:disabled{ opacity:0.3; cursor:default; }
+
+  .hand-scroll{
+    display:flex; gap:10px; overflow-x:auto; padding:6px 18px 4px; width:100%;
+    scroll-snap-type:x proximity;
+  }
+  .hand-scroll::-webkit-scrollbar{ display:none; }
+  .hand-card{
+    scroll-snap-align:center; flex-shrink:0; width:82px; height:118px; border-radius:12px;
+    background:linear-gradient(160deg, #4b5075, #363a56);
+    border:1px solid rgba(255,255,255,0.08);
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Fraunces',serif; font-weight:700; font-size:1.7rem; color:var(--text-lo);
+    cursor:default; transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .hand-card.playable{
+    background:linear-gradient(160deg, var(--parchment), #e6dcc0); color:var(--ink-0);
+    cursor:pointer; box-shadow:0 0 0 2px rgba(217,164,65,0.55), 0 10px 26px rgba(0,0,0,0.4);
+  }
+  .hand-card.playable:active{ transform:translateY(-8px) scale(1.04); }
+  .hand-empty{ color:var(--text-lo); font-size:0.85rem; padding:20px 0; }
+
+  /* ---------- OVERLAYS ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(8,9,16,0.82); backdrop-filter:blur(6px);
+    display:none; align-items:center; justify-content:center; z-index:50; padding:24px;
+  }
+  .overlay.show{ display:flex; }
+  .overlay-card{
+    background:linear-gradient(180deg, var(--ink-2), var(--ink-1));
+    border:1px solid rgba(255,255,255,0.08); border-radius:22px; padding:28px 24px;
+    max-width:360px; width:100%; text-align:center; box-shadow:0 30px 70px rgba(0,0,0,0.5);
+  }
+  .overlay-card h2{ margin:0 0 8px; font-size:1.5rem; }
+  .overlay-card p{ color:var(--text-lo); font-size:0.9rem; line-height:1.5; margin:0 0 18px; }
+  .mistake-list{ text-align:left; background:var(--ink-0); border-radius:12px; padding:12px 14px; margin-bottom:18px; font-size:0.85rem; }
+  .mistake-list div{ display:flex; justify-content:space-between; padding:4px 0; color:var(--text-lo); }
+  .mistake-list b{ color:var(--text-hi); }
+  .reward-badge{
+    width:64px; height:64px; border-radius:50%; margin:0 auto 14px; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 35% 30%, var(--gold-glow), var(--gold));
+    box-shadow:0 0 30px rgba(217,164,65,0.4);
+  }
+
+  .rules-modal .overlay-card{ max-width:400px; text-align:left; max-height:80vh; overflow-y:auto; }
+  .rules-modal h3{ margin:16px 0 6px; font-size:1rem; color:var(--gold-glow); }
+  .rules-modal p{ text-align:left; }
+  .rules-modal ul{ margin:0 0 10px; padding-left:18px; color:var(--text-lo); font-size:0.87rem; line-height:1.55; }
+
+  .toast-container{ position:fixed; top:calc(12px + var(--safe-t)); left:0; right:0; display:flex; justify-content:center; z-index:60; pointer-events:none; }
+  .banner{
+    position:relative; background:var(--ink-2); border:1px solid rgba(255,255,255,0.1); padding:9px 16px;
+    border-radius:var(--radius-pill); font-size:0.82rem; font-weight:600; color:var(--text-hi);
+    opacity:0; transform:translateY(-10px); transition:opacity .3s ease, transform .3s ease;
+  }
+  .banner.show{ opacity:1; transform:translateY(0); }
+
+  .hint{ color:var(--text-lo); font-size:0.78rem; text-align:center; padding:0 24px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HOME -->
+  <section id="screen-home" class="screen active">
+    <div class="brand">
+      <div class="glyph"></div>
+      <h1>Le Mental</h1>
+      <p>Un jeu coopératif et silencieux. Jouez vos cartes dans l'ordre, sans parler, sans compter — juste ressentir le moment.</p>
+    </div>
+
+    <div class="card-panel">
+      <div class="field">
+        <label for="input-name">Votre prénom</label>
+        <input id="input-name" maxlength="16" placeholder="Ex. Alex" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" id="btn-create">Créer une partie</button>
+    </div>
+
+    <div class="divider-text">ou</div>
+
+    <div class="card-panel">
+      <div class="field">
+        <label for="input-code">Code de la partie</label>
+        <input id="input-code" class="code" maxlength="4" placeholder="XXXX" autocomplete="off">
+      </div>
+      <button class="btn btn-ghost" id="btn-join">Rejoindre une partie</button>
+    </div>
+
+    <button class="help-link" id="btn-rules-home">Comment jouer ?</button>
+    <div class="hint" id="home-status" style="margin-top:14px;"></div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="screen-lobby" class="screen">
+    <div style="color:var(--text-lo); font-size:0.8rem; margin-top:6px;">Code de la partie</div>
+    <div class="room-code" id="lobby-code">----</div>
+    <div class="lobby-sub" id="lobby-sub">Partagez ce code avec vos amis pour qu'ils rejoignent.</div>
+
+    <div class="player-list" id="lobby-players"></div>
+
+    <div style="width:100%; max-width:360px;">
+      <button class="btn btn-primary" id="btn-start" style="display:none;" disabled>En attente de joueurs…</button>
+      <div class="hint" id="lobby-wait" style="margin-top:12px;">L'hôte lancera la partie quand tout le monde sera prêt.</div>
+    </div>
+
+    <div class="lobby-rules">
+      <div class="rules-box">
+        <b>Rappel :</b> pas un mot, pas de signe, pas de compte à rebours dans la tête. Ressentez le rythme du groupe.
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="screen-game" class="screen">
+    <div class="topbar">
+      <div class="stat"><div class="icons" id="lives-icons"></div></div>
+      <div class="level-chip" id="level-chip">Niveau 1</div>
+      <div class="stat"><div class="icons" id="stars-icons"></div></div>
+      <button class="help-btn" id="btn-rules-game">?</button>
+    </div>
+
+    <div class="others-row" id="others-row"></div>
+
+    <div class="center-stage">
+      <div class="pile-wrap">
+        <div class="ghost-card"></div>
+        <div id="pile-card-slot"></div>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+
+    <div class="hand-zone">
+      <button class="shuriken-btn" id="btn-shuriken">
+        <span id="shuriken-icon">✋</span> <span id="shuriken-label">Lever la main</span>
+      </button>
+      <div class="hand-scroll" id="hand-scroll"></div>
+      <div class="hint" id="game-hint">Jouez toujours votre carte la plus faible.</div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Overlays -->
+<div class="toast-container"><div class="banner" id="banner"></div></div>
+
+<div class="overlay" id="overlay-mistake">
+  <div class="overlay-card">
+    <h2 style="color:var(--ember-glow);">Erreur d'équipe</h2>
+    <p id="mistake-text"></p>
+    <div class="mistake-list" id="mistake-list"></div>
+    <button class="btn btn-ghost" id="btn-mistake-ok">Continuer</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-levelcomplete">
+  <div class="overlay-card">
+    <div class="reward-badge" id="lc-badge">✓</div>
+    <h2 id="lc-title">Niveau terminé</h2>
+    <p id="lc-text"></p>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-end">
+  <div class="overlay-card">
+    <h2 id="end-title">Victoire</h2>
+    <p id="end-text"></p>
+    <button class="btn btn-primary" id="btn-restart">Rejouer</button>
+  </div>
+</div>
+
+<div class="overlay rules-modal" id="overlay-rules">
+  <div class="overlay-card">
+    <h2>Règles du jeu</h2>
+    <p>L'équipe doit poser toutes ses cartes au centre, dans l'ordre croissant, sans jamais se parler ni communiquer.</p>
+    <h3>Déroulement</h3>
+    <ul>
+      <li>À chaque niveau, chaque joueur reçoit autant de cartes que le numéro du niveau.</li>
+      <li>Quand vous sentez que c'est le moment, jouez votre carte la plus faible.</li>
+      <li>Si un autre joueur avait une carte plus faible en main, l'équipe perd une vie et tout le monde défausse ses cartes plus faibles que celle jouée.</li>
+      <li>Le niveau est terminé quand toutes les cartes ont été posées. Certains niveaux offrent une vie ou une étoile bonus.</li>
+    </ul>
+    <h3>L'étoile (shuriken)</h3>
+    <ul>
+      <li>À tout moment, levez la main pour proposer d'utiliser une étoile.</li>
+      <li>Si tous les joueurs lèvent la main aussi, chacun défausse sa carte la plus faible et la partie reprend.</li>
+    </ul>
+    <h3>Fin de partie</h3>
+    <ul>
+      <li>Vous perdez si vos vies tombent à zéro.</li>
+      <li>Vous gagnez en terminant tous les niveaux.</li>
+    </ul>
+    <h3>Restrictions</h3>
+    <ul>
+      <li>Interdiction de parler, de faire des signes ou de donner le moindre indice.</li>
+      <li>Ne comptez pas les secondes, même dans votre tête — laissez le groupe trouver son rythme.</li>
+    </ul>
+    <button class="btn btn-ghost" id="btn-rules-close">Fermer</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ UTIL ============ */
+  const $ = (id) => document.getElementById(id);
+  const PALETTE = ['#c1443c','#3f7a5c','#3a6ea5','#a5732f','#7a5aa5','#2f8a8a'];
+  function colorFor(id, players){
+    const idx = players.findIndex(p=>p.id===id);
+    return PALETTE[(idx<0?0:idx) % PALETTE.length];
+  }
+  function initials(name){ return (name||'?').trim().slice(0,2).toUpperCase(); }
+  function shuffledDeck(){
+    const d = Array.from({length:100}, (_,i)=>i+1);
+    for(let i=d.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [d[i],d[j]]=[d[j],d[i]]; }
+    return d;
+  }
+  function roomCode(){
+    const chars='ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let c=''; for(let i=0;i<4;i++) c+=chars[Math.floor(Math.random()*chars.length)];
+    return c;
+  }
+  function showBanner(text, ms){
+    const b = $('banner'); b.textContent = text; b.classList.add('show');
+    clearTimeout(showBanner._t);
+    showBanner._t = setTimeout(()=>b.classList.remove('show'), ms||2600);
+  }
+  function switchScreen(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    $(id).classList.add('active');
+  }
+
+  /* ============ NETWORK ROLE ============ */
+  let role = null; // 'host' | 'guest'
+  let myId = null;
+  let myName = '';
+  let peer = null;
+  let connections = new Map(); // peerId -> DataConnection (host only)
+  let hostConn = null; // guest only
+
+  /* ============ HOST-SIDE GAME STATE ============ */
+  let G = null; // authoritative game object, host only
+  let seq = 0;
+
+  function rewardForLevel(level){
+    const map = {2:'star',3:'life',5:'star',6:'life',8:'star',9:'life'};
+    return map[level] || null;
+  }
+
+  function createGame(players){
+    const n = players.length;
+    const maxLevel = n===2?12 : n===3?10 : 8;
+    return {
+      players: players.map(p=>({id:p.id, name:p.name, hand:[], handRaised:false, connected:true})),
+      level:0, maxLevel,
+      lives:n, maxLives:5,
+      shurikens:1, maxShurikens:3,
+      pile:[], status:'lobby',
+      log:[], lastEvent:null
+    };
+  }
+
+  function addLog(g, text){
+    g.log.push(text);
+    if(g.log.length>8) g.log.shift();
+  }
+
+  function dealLevel(g){
+    g.level++;
+    const deck = shuffledDeck();
+    g.players.forEach(p=>{ p.hand = deck.splice(0, g.level).sort((a,b)=>a-b); p.handRaised=false; });
+    g.pile = [];
+    g.status = 'playing';
+    addLog(g, `Niveau ${g.level} distribué.`);
+  }
+
+  function checkLevelComplete(g){
+    if(g.status!=='playing') return;
+    if(g.players.every(p=>p.hand.length===0)){
+      const completed = g.level;
+      let reward = null;
+      const want = rewardForLevel(completed);
+      if(want==='star' && g.shurikens<g.maxShurikens){ g.shurikens++; reward='star'; }
+      else if(want==='life' && g.lives<g.maxLives){ g.lives++; reward='life'; }
+      seq++;
+      g.lastEvent = {id:seq, type:'levelcomplete', level:completed, reward};
+      addLog(g, `Niveau ${completed} terminé.`);
+      if(completed >= g.maxLevel){
+        g.status='win';
+      } else {
+        g.status='levelcomplete';
+        setTimeout(()=>{
+          if(G && G.status==='levelcomplete'){ dealLevel(G); broadcastAll(); }
+        }, 3000);
+      }
+    }
+  }
+
+  function playCard(g, playerId, card){
+    if(g.status!=='playing') return;
+    const player = g.players.find(p=>p.id===playerId);
+    if(!player || !player.connected) return;
+    if(player.hand.length===0) return;
+    const minCard = Math.min(...player.hand);
+    if(card !== minCard) return;
+    player.hand = player.hand.filter(c=>c!==card);
+    g.pile.push({value:card, owner:playerId, kind:'played'});
+
+    let mistake = false;
+    const discardedInfo = [];
+    g.players.forEach(p=>{
+      const lower = p.hand.filter(c=>c<card).sort((a,b)=>a-b);
+      if(lower.length){
+        mistake = true;
+        p.hand = p.hand.filter(c=>c>=card);
+        lower.forEach(c=> g.pile.push({value:c, owner:p.id, kind:'mistake'}));
+        discardedInfo.push({playerId:p.id, name:p.name, cards:lower});
+      }
+    });
+
+    seq++;
+    if(mistake){
+      g.lives--;
+      addLog(g, `Erreur : ${player.name} a joué ${card}. -1 vie.`);
+      g.lastEvent = {id:seq, type:'mistake', card, by:playerId, byName:player.name, discarded:discardedInfo};
+      if(g.lives<=0){ g.status='lose'; return; }
+    } else {
+      addLog(g, `${player.name} joue ${card}.`);
+      g.lastEvent = {id:seq, type:'play', card, by:playerId, byName:player.name};
+    }
+    checkLevelComplete(g);
+  }
+
+  function toggleHandRaise(g, playerId){
+    if(g.status!=='playing') return;
+    const player = g.players.find(p=>p.id===playerId);
+    if(!player || !player.connected) return;
+    player.handRaised = !player.handRaised;
+    const active = g.players.filter(p=>p.connected);
+    if(player.handRaised && active.length>1 && active.every(p=>p.handRaised) && g.shurikens>0){
+      g.shurikens--;
+      const discardedInfo = [];
+      g.players.forEach(p=>{
+        if(p.hand.length){
+          const low = Math.min(...p.hand);
+          p.hand = p.hand.filter(c=>c!==low);
+          g.pile.push({value:low, owner:p.id, kind:'shuriken'});
+          discardedInfo.push({playerId:p.id, name:p.name, cards:[low]});
+        }
+        p.handRaised = false;
+      });
+      seq++;
+      addLog(g, `Étoile utilisée : chacun défausse sa carte la plus faible.`);
+      g.lastEvent = {id:seq, type:'shuriken', discarded:discardedInfo};
+      checkLevelComplete(g);
+    }
+  }
+
+  function markDisconnected(g, playerId){
+    const p = g.players.find(pl=>pl.id===playerId);
+    if(p){ p.connected=false; p.handRaised=false; addLog(g, `${p.name} s'est déconnecté.`); }
+  }
+
+  /* ============ VIEW BUILDING & RENDER ============ */
+  function buildView(g, forId){
+    const you = g.players.find(p=>p.id===forId);
+    return {
+      screen: g.status==='lobby' ? 'lobby' : 'game',
+      you: you ? {id:you.id, name:you.name, hand:[...you.hand].sort((a,b)=>a-b), handRaised:you.handRaised} : null,
+      players: g.players.map((p,i)=>({id:p.id, name:p.name, count:p.hand.length, handRaised:p.handRaised, connected:p.connected, isYou:p.id===forId, colorIdx:i})),
+      level: g.level, maxLevel: g.maxLevel,
+      lives: g.lives, maxLives: g.maxLives,
+      shurikens: g.shurikens, maxShurikens: g.maxShurikens,
+      pile: g.pile.slice(-1),
+      status: g.status,
+      lastEvent: g.lastEvent
+    };
+  }
+
+  function broadcastAll(){
+    if(!G) return;
+    // send to self
+    renderView(buildView(G, myId));
+    // send to each guest
+    connections.forEach((conn, pid)=>{
+      if(conn.open) conn.send({type:'state', view: buildView(G, pid)});
+    });
+    if(G.status==='lobby'){ renderLobby(); }
+  }
+
+  let lastSeenEventId = -1;
+
+  function renderView(view){
+    if(view.screen==='lobby'){ renderLobbyFromView(view); return; }
+    switchScreen('screen-game');
+
+    // lives & stars
+    $('lives-icons').innerHTML = Array.from({length:view.maxLives}, (_,i)=>
+      `<span class="heart">${i<view.lives? '❤️':'<span style=\"opacity:.25\">♡</span>'}</span>`).join('');
+    $('stars-icons').innerHTML = Array.from({length:view.maxShurikens}, (_,i)=>
+      `<span class="star">${i<view.shurikens? '⭐':'<span style=\"opacity:.25\">☆</span>'}</span>`).join('');
+    $('level-chip').textContent = `Niveau ${view.level} / ${view.maxLevel}`;
+
+    // others row
+    const others = view.players.filter(p=>!p.isYou);
+    $('others-row').innerHTML = others.map(p=>`
+      <div class="other-chip ${p.handRaised?'raised':''} ${p.connected?'':'disconnected'}">
+        <div class="avatar" style="background:${PALETTE[p.colorIdx%PALETTE.length]}">${initials(p.name)}</div>
+        <div>
+          <div class="oname">${p.name}${p.handRaised? ' ✋':''}</div>
+          <div class="ocount">${p.count} carte${p.count>1?'s':''}</div>
+        </div>
+      </div>
+    `).join('');
+
+    // pile
+    const top = view.pile[view.pile.length-1];
+    const slot = $('pile-card-slot');
+    if(top){
+      const ownerP = view.players.find(p=>p.id===top.owner);
+      slot.innerHTML = `<div class="pile-card ${top.kind==='mistake'?'mistake':''}">
+        <div class="num">${top.value}</div>
+        <div class="owner-tag">${ownerP? ownerP.name : ''}</div>
+      </div>`;
+    } else {
+      slot.innerHTML = '';
+    }
+
+    // hand
+    const you = view.you;
+    const hs = $('hand-scroll');
+    if(you && you.hand.length){
+      const minCard = Math.min(...you.hand);
+      hs.innerHTML = you.hand.map(c=>`<div class="hand-card ${c===minCard?'playable':''}" data-card="${c}">${c}</div>`).join('');
+      hs.querySelectorAll('.hand-card.playable').forEach(el=>{
+        el.addEventListener('click', ()=> sendAction({type:'play', card: parseInt(el.dataset.card,10)}));
+      });
+    } else {
+      hs.innerHTML = `<div class="hand-empty">Votre main est vide. En attente des autres…</div>`;
+    }
+
+    // shuriken button
+    const sk = $('btn-shuriken');
+    const noStars = view.shurikens<=0;
+    sk.disabled = noStars || view.status!=='playing';
+    sk.classList.toggle('active', !!(you && you.handRaised));
+    $('shuriken-icon').textContent = (you && you.handRaised) ? '🤚' : '✋';
+    $('shuriken-label').textContent = (you && you.handRaised) ? 'Main levée — annuler' : (noStars ? "Plus d'étoile" : 'Lever la main pour une étoile');
+
+    // toast on new event
+    if(view.lastEvent && view.lastEvent.id !== lastSeenEventId){
+      lastSeenEventId = view.lastEvent.id;
+      handleEvent(view, view.lastEvent);
+    }
+
+    // overlays for status
+    if(view.status==='win'){
+      $('end-title').textContent = 'Victoire !';
+      $('end-text').textContent = `Vous avez terminé les ${view.maxLevel} niveaux ensemble. Belle synchronisation.`;
+      $('overlay-end').classList.add('show');
+    } else if(view.status==='lose'){
+      $('end-title').textContent = 'Défaite';
+      $('end-text').textContent = `L'équipe a perdu sa dernière vie au niveau ${view.level}.`;
+      $('overlay-end').classList.add('show');
+    } else {
+      $('overlay-end').classList.remove('show');
+    }
+  }
+
+  function handleEvent(view, ev){
+    if(ev.type==='mistake'){
+      const list = $('mistake-list');
+      list.innerHTML = ev.discarded.map(d=>`<div><span>${d.name}</span><b>${d.cards.join(', ')}</b></div>`).join('');
+      $('mistake-text').textContent = `${ev.byName} a joué ${ev.card}, mais une carte plus faible était encore en jeu. L'équipe perd une vie.`;
+      if(view.status!=='lose'){
+        $('overlay-mistake').classList.add('show');
+      }
+      showToast(`Erreur — ${ev.byName} a joué ${ev.card}`, 'mistake');
+    } else if(ev.type==='play'){
+      showToast(`${ev.byName} joue ${ev.card}`, '');
+    } else if(ev.type==='shuriken'){
+      showBanner('⭐ Étoile utilisée — chacun défausse sa carte la plus faible', 3200);
+    } else if(ev.type==='levelcomplete'){
+      $('lc-title').textContent = `Niveau ${ev.level} terminé`;
+      $('lc-badge').textContent = ev.reward==='star' ? '⭐' : ev.reward==='life' ? '❤️' : '✓';
+      $('lc-text').textContent = ev.reward==='star' ? 'Récompense : +1 étoile'
+        : ev.reward==='life' ? 'Récompense : +1 vie'
+        : 'Prochain niveau dans un instant…';
+      $('overlay-levelcomplete').classList.add('show');
+      setTimeout(()=> $('overlay-levelcomplete').classList.remove('show'), 2800);
+    }
+  }
+
+  function showToast(text, kind){
+    const t = $('toast');
+    t.textContent = text;
+    t.className = 'toast show ' + (kind||'');
+    void t.offsetWidth;
+    t.classList.add('show');
+  }
+
+  $('btn-mistake-ok').addEventListener('click', ()=> $('overlay-mistake').classList.remove('show'));
+
+  /* ============ LOBBY RENDER ============ */
+  let lobbyView = null;
+  function renderLobby(){
+    if(!G) return;
+    renderLobbyFromView(buildView(G, myId));
+  }
+  function renderLobbyFromView(view){
+    switchScreen('screen-lobby');
+    $('lobby-players').innerHTML = view.players.map((p,i)=>`
+      <div class="player-row">
+        <div class="avatar" style="background:${PALETTE[i%PALETTE.length]}">${initials(p.name)}</div>
+        <div class="pname">${p.name}${p.isYou? ' (vous)':''}</div>
+        <div class="ptag">${role==='host' && p.id===view.players[0].id ? 'hôte' : 'prêt'}</div>
+      </div>
+    `).join('');
+    if(role==='host'){
+      const n = view.players.length;
+      const btn = $('btn-start');
+      btn.style.display = 'inline-flex';
+      $('lobby-wait').style.display='none';
+      if(n>=2 && n<=5){
+        btn.disabled=false;
+        btn.textContent = `Lancer la partie (${n} joueurs)`;
+      } else {
+        btn.disabled=true;
+        btn.textContent = n<2 ? "En attente d'au moins 2 joueurs…" : 'Maximum 5 joueurs';
+      }
+    } else {
+      $('btn-start').style.display='none';
+      $('lobby-wait').style.display='block';
+    }
+  }
+
+  /* ============ ACTIONS (sent from any client) ============ */
+  function sendAction(action){
+    if(role==='host'){
+      applyHostAction(myId, action);
+    } else if(hostConn && hostConn.open){
+      hostConn.send(action);
+    }
+  }
+
+  function applyHostAction(fromId, action){
+    if(!G) return;
+    if(action.type==='play'){ playCard(G, fromId, action.card); broadcastAll(); }
+    else if(action.type==='raise'){ toggleHandRaise(G, fromId); broadcastAll(); }
+    else if(action.type==='restart'){
+      const keep = G.players.filter(p=>p.connected).map(p=>({id:p.id, name:p.name}));
+      G = createGame(keep);
+      renderLobby();
+      connections.forEach((conn)=>{ if(conn.open) conn.send({type:'state', view: buildView(G, conn.peer)}); });
+    }
+  }
+
+  $('btn-shuriken').addEventListener('click', ()=> sendAction({type:'raise'}));
+  $('btn-restart').addEventListener('click', ()=>{
+    $('overlay-end').classList.remove('show');
+    sendAction({type:'restart'});
+  });
+
+  /* ============ PEERJS WIRING ============ */
+  function initPeer(id){
+    return new Promise((resolve, reject)=>{
+      const p = new Peer(id, { debug:1 });
+      p.on('open', pid => resolve(p));
+      p.on('error', err => reject(err));
+    });
+  }
+
+  async function createRoom(name){
+    myName = name;
+    $('home-status').textContent = 'Création de la salle…';
+    let code, p;
+    for(let attempt=0; attempt<6; attempt++){
+      code = roomCode();
+      try{
+        p = await initPeer('mind-' + code);
+        break;
+      }catch(e){ p = null; }
+    }
+    if(!p){ $('home-status').textContent = "Impossible de créer la salle, réessayez."; return; }
+    peer = p;
+    role = 'host';
+    myId = peer.id;
+    G = createGame([{id:myId, name:myName}]);
+    $('lobby-code').textContent = code;
+    renderLobby();
+    switchScreen('screen-lobby');
+
+    peer.on('connection', (conn)=>{
+      conn.on('open', ()=>{});
+      conn.on('data', (data)=>{
+        if(data.type==='join'){
+          if(G.status!=='lobby' && !G.players.find(p=>p.id===conn.peer)){
+            conn.send({type:'error', message:'La partie a déjà commencé.'});
+            return;
+          }
+          if(G.players.length>=5 && !G.players.find(p=>p.id===conn.peer)){
+            conn.send({type:'error', message:'Salle complète (5 joueurs max).'});
+            return;
+          }
+          connections.set(conn.peer, conn);
+          let existing = G.players.find(pl=>pl.id===conn.peer);
+          if(existing){ existing.connected=true; existing.name = data.name || existing.name; }
+          else { G.players.push({id:conn.peer, name:data.name||'Joueur', hand:[], handRaised:false, connected:true}); }
+          broadcastAll();
+        } else if(data.type==='play' || data.type==='raise' || data.type==='restart'){
+          applyHostAction(conn.peer, data);
+        }
+      });
+      conn.on('close', ()=>{
+        connections.delete(conn.peer);
+        markDisconnected(G, conn.peer);
+        broadcastAll();
+      });
+    });
+  }
+
+  $('btn-start').addEventListener('click', ()=>{
+    if(!G || G.players.length<2 || G.players.length>5) return;
+    dealLevel(G);
+    broadcastAll();
+  });
+
+  async function joinRoom(name, code){
+    myName = name;
+    $('home-status').textContent = 'Connexion à la salle…';
+    try{
+      peer = await initPeer(null);
+    }catch(e){
+      $('home-status').textContent = "Impossible de se connecter au réseau.";
+      return;
+    }
+    role = 'guest';
+    myId = peer.id;
+    const conn = peer.connect('mind-' + code.toUpperCase(), {reliable:true});
+    hostConn = conn;
+    let opened = false;
+    const timeout = setTimeout(()=>{
+      if(!opened) $('home-status').textContent = "Salle introuvable. Vérifiez le code.";
+    }, 6000);
+    conn.on('open', ()=>{
+      opened = true; clearTimeout(timeout);
+      conn.send({type:'join', name: myName});
+      $('lobby-code').textContent = code.toUpperCase();
+      switchScreen('screen-lobby');
+      $('home-status').textContent = '';
+    });
+    conn.on('data', (data)=>{
+      if(data.type==='state'){ renderView(data.view); }
+      else if(data.type==='error'){ $('home-status').textContent = data.message; }
+    });
+    conn.on('close', ()=>{ showBanner("Connexion perdue avec l'hôte.", 4000); });
+    conn.on('error', ()=>{ $('home-status').textContent = "Erreur de connexion."; });
+  }
+
+  /* ============ HOME SCREEN WIRING ============ */
+  $('btn-create').addEventListener('click', ()=>{
+    const name = $('input-name').value.trim();
+    if(!name){ $('home-status').textContent = 'Entrez votre prénom.'; return; }
+    createRoom(name);
+  });
+  $('btn-join').addEventListener('click', ()=>{
+    const name = $('input-name').value.trim();
+    const code = $('input-code').value.trim();
+    if(!name){ $('home-status').textContent = 'Entrez votre prénom.'; return; }
+    if(code.length!==4){ $('home-status').textContent = 'Le code contient 4 lettres.'; return; }
+    joinRoom(name, code);
+  });
+  $('input-code').addEventListener('input', (e)=>{ e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,4); });
+
+  /* ============ RULES MODAL ============ */
+  $('btn-rules-home').addEventListener('click', ()=> $('overlay-rules').classList.add('show'));
+  $('btn-rules-game').addEventListener('click', ()=> $('overlay-rules').classList.add('show'));
+  $('btn-rules-close').addEventListener('click', ()=> $('overlay-rules').classList.remove('show'));
+
+})();
+</script>
+</body>
+</html>
